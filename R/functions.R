@@ -10,17 +10,20 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and limitations under the License.
 
-get_pm25_data <- function(...) {
+get_pm25_data <- function(keep_csv = FALSE, ...) {
   pm25_link <- "ftp://ftp.env.gov.bc.ca/pub/outgoing/AIR/AnnualSummary/2009-LatestVerified/PM25.csv"
+  filepath <- pm25_link
   
-  stored_path <- file.path("data/pm25", basename(pm25_link))
-  
-  if (!file.exists(stored_path)) {
-    dir.create(dirname(stored_path), showWarnings = FALSE )
-    download.file(pm25_link, destfile = stored_path, quiet = TRUE, method = "curl")
+  if (keep_csv) {
+    filepath <- file.path("data/pm25", basename(pm25_link))
+    if (!file.exists(filepath)) {
+      dir.create(dirname(filepath), showWarnings = FALSE )
+      download.file(pm25_link, destfile = filepath, quiet = TRUE, method = "curl")
+    }
   }
   
-  readr::read_csv(stored_path, 
+  
+  readr::read_csv(filepath, 
            col_types = readr::cols_only(DATE_PST = readr::col_datetime(), 
                                  EMS_ID = readr::col_character(), 
                                  STATION_NAME = readr::col_character(),
@@ -52,4 +55,10 @@ get_aq_stations <- function() {
   }
   
   readr::read_csv(stored_path, na = c("", "N/A"))
+}
+
+get_station_names <- function() {
+  read_csv("data/stn_names_reporting.csv") %>% 
+    mutate(ems_id = str_pad(ems_id, 7, "left", "0")) %>% 
+    rename(orig_stn_name = station_name)
 }

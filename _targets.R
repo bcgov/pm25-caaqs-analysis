@@ -17,16 +17,35 @@ source("./packages.R")
 lapply(list.files("./R", full.names = TRUE), source)
 
 
+# Constants and options -----------------------------
+
+options("rcaaqs.timezone" = "Etc/GMT+8")
+
+constants <- list(
+  tar_target(max_year, 2019L)
+)
+
 # Load pm25 and stations data -----------------------
 
 data_load <- list(
   tar_target(pm25, get_pm25_data()),
-  tar_target(aq_stations, get_aq_stations())
+  tar_target(aq_stations, get_aq_stations()),
+  tar_target(stn_names, get_station_names())
 )
 
 # Run -----------------------------------------------
 
 list(
+  constants,
   data_load
   #...
 )
+
+
+
+
+##### TODO
+## tar_render is from {tarchetypes}
+# mon_year <- format(Sys.Date(), "%B%Y")
+# outfile <- paste0("print_ver/envreportbc_pm25_", mon_year, ".pdf")
+# tar_render(doc, "print_ver/pm25.Rmd", output_file = outfile)
