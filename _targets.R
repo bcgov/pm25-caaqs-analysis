@@ -31,6 +31,7 @@ constants <- list(
 # Load pm25 and stations data -----------------------
 
 data_load <- list(
+  tar_target(airzones, bcmaps::airzones()),
   tar_target(pm25, get_pm25_data()),
   tar_target(aq_stations, get_aq_stations()),
   tar_target(stn_names, get_station_names(station_names_csv))
@@ -39,13 +40,17 @@ data_load <- list(
 
 # Clean data ----------------------------------------
 
+data_clean <- list(
+  tar_target(aq_stations_clean, clean_stations(aq_stations, stn_names, airzones))
+)
 
 
 # Run -----------------------------------------------
 
 list(
   constants,
-  data_load
+  data_load,
+  data_clean
   #...
 )
 

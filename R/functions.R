@@ -62,3 +62,46 @@ get_station_names <- function(file) {
     mutate(ems_id = str_pad(ems_id, 7, "left", "0")) %>% 
     rename(orig_stn_name = station_name)
 }
+
+clean_stations <- function(aq_stations, stn_names, airzones) {
+  ## Set stations to exclude from analyis (those in indsutrial settings):
+  excluded_stations <- aq_stations$EMS_ID[grepl("industr", aq_stations$STATION_ENVIRONMENT, ignore.case = TRUE)]
+  
+  # remove bc_hydro stations (fort st James) as not reported 
+  bchydro_stations <- unique(aq_stations$EMS_ID[grepl("INDUSTRY-BCH", aq_stations$STATION_OWNER, ignore.case = TRUE)])
+  excluded_stations <- unique(c(excluded_stations, bchydro_stations))
+
+  # Combine two squamish stations (both FEM, one in 2015 and the other in 2016-17)
+  # for a complete record
+  squamish_ems_ids <- c("0310172", "E304570")
+  combo_squamish_id <- paste(squamish_ems_ids, collapse = "-")
+  
+  ## Clean station data - lowercase column names, remove pseudo-duplicates, subset to those 
+  ## stations analysed
+  ## OLD == closed stns; 
+  ## _60 == meteorological stns;
+  ## Met == meteorological stns using Campbell loggers; 
+  ## BAM == Beta Attenuation Monitoring for PM measurement.
+  select_pattern <- "_60$|Met$|OLD$|BAM$|Squamish Gov't Bldg"
+  
+  aq_stations %>% 
+    rename_all(tolower) %>% 
+    mutate(ems_id = case_when(ems_id %in% squamish_ems_ids ~ combo_squamish_id, 
+                              TRUE ~ gsub("_.+$", "", ems_id))) %>% 
+    group_by(ems_id) %>%
+    filter(n() == 1 | 
+             !grepl(select_pattern, station_name) | 
+             all(grepl(select_pattern, station_name))) %>% 
+    filter(!is.na(latitude), !is.na(longitude)) %>% 
+    mutate(station_name = gsub(select_pattern, "", station_name), 
+           station_name = gsub("(Squamish).+", "\\1", station_name)) %>% 
+    # semi_join(pm25_clean, by = "ems_id") %>% 
+    top_n(1, station_name) %>% 
+    ungroup() %>% 
+    left_join(select(stn_names, -airzone), by = "ems_id") %>% 
+    mutate(station_name = case_when(is.na(reporting_name) ~ station_name,
+                                    TRUE ~ reporting_name)) %>% 
+    assign_airzone(airzones = airzones, 
+                   station_id = "ems_id", 
+                   coords = c("longitude", "latitude"))
+}
