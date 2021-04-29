@@ -57,8 +57,8 @@ get_aq_stations <- function() {
   readr::read_csv(stored_path, na = c("", "N/A"))
 }
 
-get_station_names <- function() {
-  read_csv("data/stn_names_reporting.csv") %>% 
+get_station_names <- function(file) {
+  read_csv(file) %>% 
     mutate(ems_id = str_pad(ems_id, 7, "left", "0")) %>% 
     rename(orig_stn_name = station_name)
 }

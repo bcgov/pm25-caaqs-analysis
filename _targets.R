@@ -13,16 +13,19 @@
 ## Load your packages, e.g. library(targets).
 source("./packages.R")
 
+conflict_prefer("filter", "dplyr")
+
 ## Load your R files
 lapply(list.files("./R", full.names = TRUE), source)
 
 
-# Constants and options -----------------------------
+# Constants, input files and options -----------------------------
 
 options("rcaaqs.timezone" = "Etc/GMT+8")
 
 constants <- list(
-  tar_target(max_year, 2019L)
+  tar_target(max_year, 2019L), 
+  tar_target(station_names_csv, "data/stn_names_reporting.csv", format = "file")
 )
 
 # Load pm25 and stations data -----------------------
@@ -30,8 +33,13 @@ constants <- list(
 data_load <- list(
   tar_target(pm25, get_pm25_data()),
   tar_target(aq_stations, get_aq_stations()),
-  tar_target(stn_names, get_station_names())
+  tar_target(stn_names, get_station_names(station_names_csv))
 )
+
+
+# Clean data ----------------------------------------
+
+
 
 # Run -----------------------------------------------
 
