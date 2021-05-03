@@ -64,12 +64,7 @@ get_station_names <- function(file) {
 }
 
 clean_stations <- function(aq_stations, stn_names, airzones) {
-  ## Set stations to exclude from analyis (those in indsutrial settings):
-  excluded_stations <- aq_stations$EMS_ID[grepl("industr", aq_stations$STATION_ENVIRONMENT, ignore.case = TRUE)]
-  
-  # remove bc_hydro stations (fort st James) as not reported 
-  bchydro_stations <- unique(aq_stations$EMS_ID[grepl("INDUSTRY-BCH", aq_stations$STATION_OWNER, ignore.case = TRUE)])
-  excluded_stations <- unique(c(excluded_stations, bchydro_stations))
+  excluded_stations <- stations_exclude(aq_stations)
 
   # Combine two squamish stations (both FEM, one in 2015 and the other in 2016-17)
   # for a complete record
@@ -104,4 +99,55 @@ clean_stations <- function(aq_stations, stn_names, airzones) {
     assign_airzone(airzones = airzones, 
                    station_id = "ems_id", 
                    coords = c("longitude", "latitude"))
+}
+
+stations_exclude <- function(aq_stations) {
+  ## Set stations to exclude from analysis (those in industrial settings):
+  excluded_stations <- aq_stations$EMS_ID[grepl("industr", aq_stations$STATION_ENVIRONMENT, ignore.case = TRUE)]
+  
+  # remove bc_hydro stations (fort st James) as not reported 
+  bchydro_stations <- unique(aq_stations$EMS_ID[grepl("INDUSTRY-BCH", aq_stations$STATION_OWNER, ignore.case = TRUE)])
+  unique(c(excluded_stations, bchydro_stations))
+}
+
+pre_clean_pm25 <- function(pm25_df, max_year, excluded_stations = NULL) {
+  pm25_df %>% 
+    filter(!EMS_ID %in% excluded_stations) %>% 
+    mutate(date_time = format_caaqs_dt(DATE_PST), 
+           year = year(date_time)) %>% 
+    filter(year <= max_year) %>% 
+    select(-DATE_PST) %>% 
+    rename_all(tolower) %>% 
+    rename(value = raw_value) %>% 
+    mutate(ems_id = gsub("_1$", "", ems_id), # remove _1 from ems_id (Smithers St Josephs)
+           value = clean_neg(value, type = "pm25"),) %>% 
+    group_by(ems_id, instrument) %>% 
+    do(., date_fill(., date_col = "date_time",
+                    fill_cols = c("ems_id", "instrument", "parameter"),
+                    interval = "1 hour")) %>% 
+    mutate(instrument_type = 
+             case_when(grepl("TEOM", instrument) ~ "TEOM",
+                       grepl("SHARP|BAM", instrument) ~ "FEM", 
+                       is.na(instrument) ~ NA_character_,
+                       TRUE ~ "Unknown"), 
+           year = year(date_time)) %>% 
+    ungroup() %>% 
+    # Filter NAs out of Kamloops Fed building from two overlapping monitors
+    filter(!(ems_id == "0605008" & 
+               instrument == "BAM1020" & 
+               date_time > as.POSIXct("2017/06/19 14:59:59")) & 
+             !(ems_id == "0605008" & 
+                 instrument == "PM25 SHARP5030" & 
+                 date_time <= as.POSIXct("2017/06/19 14:59:59"))
+    ) %>% 
+    # Remove TEOM from Grand forks in 2017, as there was also FEM running at the 
+    # same time, and combine TEOM and FEM for that station
+    filter(!(ems_id == "E263701" & 
+               instrument_type == "TEOM" & 
+               date_time >= as.POSIXct("2016-12-31 23:59:59")
+    )) %>% 
+    mutate(
+      instrument_type = ifelse(ems_id == "E263701", "TEOM (2017 FEM)", instrument_type)
+    ) %>% 
+    distinct()
 }

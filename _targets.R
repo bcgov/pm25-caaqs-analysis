@@ -37,11 +37,11 @@ data_load <- list(
   tar_target(stn_names, get_station_names(station_names_csv))
 )
 
-
 # Clean data ----------------------------------------
 
 data_clean <- list(
-  tar_target(aq_stations_clean, clean_stations(aq_stations, stn_names, airzones))
+  tar_target(aq_stations_clean, clean_stations(aq_stations, stn_names, airzones)),
+  tar_target(pm25_preclean, pre_clean_pm25(pm25, max_year, stations_exclude(aq_stations)))
 )
 
 
