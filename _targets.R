@@ -25,7 +25,8 @@ options("rcaaqs.timezone" = "Etc/GMT+8")
 
 constants <- list(
   tar_target(max_year, 2019L), 
-  tar_target(station_names_csv, "data/stn_names_reporting.csv", format = "file")
+  tar_target(station_names_csv, "data/stn_names_reporting.csv", format = "file"),
+  tar_target(station_combo_csv, "data/combo-stations.csv", format = "file")
 )
 
 # Load pm25 and stations data -----------------------
@@ -34,13 +35,14 @@ data_load <- list(
   tar_target(airzones, bcmaps::airzones()),
   tar_target(pm25, get_pm25_data()),
   tar_target(aq_stations, get_aq_stations()),
-  tar_target(stn_names, get_station_names(station_names_csv))
+  tar_target(stn_names, get_station_names(station_names_csv)),
+  tar_target(station_combos, create_station_combos(station_combo_csv))
 )
 
 # Clean data ----------------------------------------
 
 data_clean <- list(
-  tar_target(aq_stations_clean, clean_stations(aq_stations, stn_names, airzones)),
+  tar_target(aq_stations_clean, clean_stations(aq_stations, stn_names, airzones, station_combos)),
   tar_target(pm25_preclean, pre_clean_pm25(pm25, max_year, stations_exclude(aq_stations)))
 )
 

@@ -63,13 +63,19 @@ get_station_names <- function(file) {
     rename(orig_stn_name = station_name)
 }
 
-clean_stations <- function(aq_stations, stn_names, airzones) {
-  excluded_stations <- stations_exclude(aq_stations)
+create_station_combos <- function(stn_combo_csv) {
+    stn_combo_csv %>%
+    read_csv() %>% 
+    group_by(combo) %>% 
+    mutate(combo_ems_id = paste(ems_id, collapse = "-"),
+           combo_stn_name = paste(station_name, collapse = "/")) %>% 
+    ungroup()
+}
 
-  # Combine two squamish stations (both FEM, one in 2015 and the other in 2016-17)
-  # for a complete record
-  squamish_ems_ids <- c("0310172", "E304570")
-  combo_squamish_id <- paste(squamish_ems_ids, collapse = "-")
+clean_stations <- function(aq_stations, stn_names, airzones, stn_combos) {
+  excluded_stations <- stations_exclude(aq_stations)
+  
+  aq_stations <- aq_stations[!aq_stations$EMS_ID %in% excluded_stations, , drop = FALSE]
   
   ## Clean station data - lowercase column names, remove pseudo-duplicates, subset to those 
   ## stations analysed
@@ -77,25 +83,32 @@ clean_stations <- function(aq_stations, stn_names, airzones) {
   ## _60 == meteorological stns;
   ## Met == meteorological stns using Campbell loggers; 
   ## BAM == Beta Attenuation Monitoring for PM measurement.
-  select_pattern <- "_60$|Met$|OLD$|BAM$|Squamish Gov't Bldg"
+  select_pattern <- "_60$|Met$|OLD$|BAM$"
+  
+  aq_stations <- rename_all(aq_stations, tolower) 
+    
+  # Combine stations
+  ems_id_combos <- setNames(stn_combos$combo_ems_id, stn_combos$ems_id)
+  newid <- unname(ems_id_combos[aq_stations$ems_id])
+  stn_name_combos <- setNames(stn_combos$combo_stn_name, stn_combos$ems_id)
+  newname <- unname(stn_name_combos[aq_stations$ems_id])
+  aq_stations$ems_id[!is.na(newid)] <- newid[!is.na(newid)]
+  aq_stations$station_name[!is.na(newname)] <- newname[!is.na(newname)]
   
   aq_stations %>% 
-    rename_all(tolower) %>% 
-    mutate(ems_id = case_when(ems_id %in% squamish_ems_ids ~ combo_squamish_id, 
-                              TRUE ~ gsub("_.+$", "", ems_id))) %>% 
     group_by(ems_id) %>%
     filter(n() == 1 | 
              !grepl(select_pattern, station_name) | 
              all(grepl(select_pattern, station_name))) %>% 
     filter(!is.na(latitude), !is.na(longitude)) %>% 
-    mutate(station_name = gsub(select_pattern, "", station_name), 
-           station_name = gsub("(Squamish).+", "\\1", station_name)) %>% 
-    # semi_join(pm25_clean, by = "ems_id") %>% 
-    top_n(1, station_name) %>% 
-    ungroup() %>% 
+    mutate(station_name = gsub(select_pattern, "", station_name)) %>% 
     left_join(select(stn_names, -airzone), by = "ems_id") %>% 
+    ungroup() %>% 
+    group_by(ems_id) %>% 
+    slice_head(n = 1) %>% 
     mutate(station_name = case_when(is.na(reporting_name) ~ station_name,
                                     TRUE ~ reporting_name)) %>% 
+    ungroup() %>% 
     assign_airzone(airzones = airzones, 
                    station_id = "ems_id", 
                    coords = c("longitude", "latitude"))

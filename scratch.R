@@ -38,12 +38,22 @@ stn_combos <- stn_combos %>%
   combo_stn_name = paste(station_name, collapse = "/")) %>% 
   ungroup()
 
-ems_id_combos_vec <- setNames(stn_combos$combo_ems_id, stn_combos$ems_id)
-newid <- unname(ems_id_combos_vec[aq_stations$EMS_ID])
+system.time({
+  ems_id_combos <- setNames(stn_combos$combo_ems_id, stn_combos$ems_id)
+  # newid <- unname(ems_id_combos[aq_stations$EMS_ID])
+  
+  stn_name_combos <- setNames(stn_combos$combo_stn_name, stn_combos$ems_id)
+  # newname <- unname(stn_name_combos[aq_stations$EMS_ID])
+  
+  # aq_stations$EMS_ID[!is.na(newid)] <- newid[!is.na(newid)]
+  # aq_stations$STATION_NAME[!is.na(newname)] <- newname[!is.na(newname)]
+  
+  new_pm_ems_ids <- ems_id_combos[pm25_new$ems_id]
+  pm25_new$ems_id[!is.na(new_pm_ems_ids)] <- new_pm_ems_ids[!is.na(new_pm_ems_ids)]
+})
 
-stn_name_combos_vec <- setNames(stn_combos$combo_stn_name, stn_combos$ems_id)
-newname <- unname(stn_name_combos_vec[aq_stations$EMS_ID])
-
-aq_stations$EMS_ID[!is.na(newid)] <- newid[!is.na(newid)]
-aq_stations$STATION_NAME[!is.na(newname)] <- newname[!is.na(newname)]
-
+system.time(
+pm25_2 <- pm25_new %>% 
+  left_join(stn_combos, c("ems_id" = "ems_id")) %>% 
+  mutate(ems_id = ifelse(is.na(combo_ems_id), ems_id, combo_ems_id))
+)
