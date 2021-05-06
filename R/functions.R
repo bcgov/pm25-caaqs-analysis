@@ -72,7 +72,7 @@ create_station_combos <- function(stn_combo_csv) {
     ungroup()
 }
 
-clean_stations <- function(aq_stations, stn_names, airzones, stn_combos) {
+clean_stations <- function(aq_stations, stn_names, airzones, stn_combos = NULL) {
   excluded_stations <- stations_exclude(aq_stations)
   
   aq_stations <- aq_stations[!aq_stations$EMS_ID %in% excluded_stations, , drop = FALSE]
@@ -88,12 +88,14 @@ clean_stations <- function(aq_stations, stn_names, airzones, stn_combos) {
   aq_stations <- rename_all(aq_stations, tolower) 
     
   # Combine stations
-  ems_id_combos <- setNames(stn_combos$combo_ems_id, stn_combos$ems_id)
-  newid <- unname(ems_id_combos[aq_stations$ems_id])
-  stn_name_combos <- setNames(stn_combos$combo_stn_name, stn_combos$ems_id)
-  newname <- unname(stn_name_combos[aq_stations$ems_id])
-  aq_stations$ems_id[!is.na(newid)] <- newid[!is.na(newid)]
-  aq_stations$station_name[!is.na(newname)] <- newname[!is.na(newname)]
+  if (!is.null(stn_combos) && is.data.frame(stn_combos)) {
+    ems_id_combos <- setNames(stn_combos$combo_ems_id, stn_combos$ems_id)
+    newid <- unname(ems_id_combos[aq_stations$ems_id])
+    stn_name_combos <- setNames(stn_combos$combo_stn_name, stn_combos$ems_id)
+    newname <- unname(stn_name_combos[aq_stations$ems_id])
+    aq_stations$ems_id[!is.na(newid)] <- newid[!is.na(newid)]
+    aq_stations$station_name[!is.na(newname)] <- newname[!is.na(newname)]
+  }
   
   aq_stations %>% 
     group_by(ems_id) %>%
@@ -123,8 +125,8 @@ stations_exclude <- function(aq_stations) {
   unique(c(excluded_stations, bchydro_stations))
 }
 
-pre_clean_pm25 <- function(pm25_df, max_year, excluded_stations = NULL) {
-  pm25_df %>% 
+pre_clean_pm25 <- function(pm25_df, max_year, excluded_stations = NULL, stn_combos = NULL) {
+  pm25_df <- pm25_df %>% 
     filter(!EMS_ID %in% excluded_stations) %>% 
     mutate(date_time = format_caaqs_dt(DATE_PST), 
            year = year(date_time)) %>% 
@@ -133,10 +135,23 @@ pre_clean_pm25 <- function(pm25_df, max_year, excluded_stations = NULL) {
     rename_all(tolower) %>% 
     rename(value = raw_value) %>% 
     mutate(ems_id = gsub("_1$", "", ems_id), # remove _1 from ems_id (Smithers St Josephs)
-           value = clean_neg(value, type = "pm25"),) %>% 
-    group_by(ems_id, instrument) %>% 
+           value = clean_neg(value, type = "pm25"),)
+  
+  if (!is.null(stn_combos) && is.data.frame(stn_combos)) {
+    ems_id_combos <- setNames(stn_combos$combo_ems_id, stn_combos$ems_id)
+    stn_name_combos <- setNames(stn_combos$combo_stn_name, stn_combos$ems_id)
+
+    new_pm_ems_ids <- ems_id_combos[pm25_df$ems_id]
+    pm25_df$ems_id[!is.na(new_pm_ems_ids)] <- new_pm_ems_ids[!is.na(new_pm_ems_ids)]
+    
+    new_pm_stn_names <- stn_name_combos[pm25_df$ems_id]
+    pm25_df$station_name[!is.na(new_pm_stn_names)] <- new_pm_stn_names[!is.na(new_pm_stn_names)]
+  }
+  
+  pm25_df %>% 
+    group_by(ems_id, station_name, instrument) %>% 
     do(., date_fill(., date_col = "date_time",
-                    fill_cols = c("ems_id", "instrument", "parameter"),
+                    fill_cols = c("ems_id", "station_name", "instrument", "parameter"),
                     interval = "1 hour")) %>% 
     mutate(instrument_type = 
              case_when(grepl("TEOM", instrument) ~ "TEOM",
@@ -145,14 +160,6 @@ pre_clean_pm25 <- function(pm25_df, max_year, excluded_stations = NULL) {
                        TRUE ~ "Unknown"), 
            year = year(date_time)) %>% 
     ungroup() %>% 
-    # Filter NAs out of Kamloops Fed building from two overlapping monitors
-    filter(!(ems_id == "0605008" & 
-               instrument == "BAM1020" & 
-               date_time > as.POSIXct("2017/06/19 14:59:59")) & 
-             !(ems_id == "0605008" & 
-                 instrument == "PM25 SHARP5030" & 
-                 date_time <= as.POSIXct("2017/06/19 14:59:59"))
-    ) %>% 
     # Remove TEOM from Grand forks in 2017, as there was also FEM running at the 
     # same time, and combine TEOM and FEM for that station
     filter(!(ems_id == "E263701" & 
